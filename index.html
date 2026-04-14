@@ -551,6 +551,68 @@
     function bpsToStr(bps) { return (Number(bps) / 100).toFixed(2) + "%"; }
 
     // ================================================================
+    //  CONNECT MODAL
+    // ================================================================
+    function showConnectModal() {
+      document.getElementById("connectModal").classList.remove("hidden");
+      document.getElementById("pkSection").classList.add("hidden");
+      document.getElementById("aliterraBtnChoice").classList.remove("hidden");
+      document.getElementById("pkInput").value = "";
+    }
+
+    function closeConnectModal() {
+      document.getElementById("connectModal").classList.add("hidden");
+    }
+
+    function showPkSection() {
+      document.getElementById("pkSection").classList.remove("hidden");
+      document.getElementById("aliterraBtnChoice").classList.add("hidden");
+      setTimeout(() => document.getElementById("pkInput").focus(), 100);
+    }
+
+    async function connectAliTerraWallet() {
+      const pk = document.getElementById("pkInput").value.trim();
+      if (!pk) return showToast("\u0412\u0432\u0435\u0434\u0438 \u043f\u0440\u0438\u0432\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u044e\u0447", "error");
+      try {
+        const rpcProvider = new ethers.JsonRpcProvider("https://polygon-rpc.com/", 137);
+        const wallet = new ethers.Wallet(pk, rpcProvider);
+        provider = rpcProvider;
+        signer   = wallet;
+
+        contract     = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        luxTokenAddr = await contract.getLUXToken();
+
+        const ownerAddr = await contract.owner();
+        isOwner = ownerAddr.toLowerCase() === signer.address.toLowerCase();
+
+        document.getElementById("connectText").textContent = "\u2713 " + shortAddr(signer.address);
+        const btn = document.getElementById("connectBtn");
+        btn.classList.replace("bg-white", "bg-yellow-400");
+        btn.onclick = null;
+
+        document.getElementById("refLinkSection").classList.remove("hidden");
+        document.getElementById("refLinkInput").value =
+          location.origin + location.pathname + "?ref=" + signer.address;
+
+        if (isOwner) {
+          document.getElementById("adminPanel").classList.remove("hidden");
+          document.getElementById("ownerAddress").textContent = shortAddr(signer.address);
+          await refreshAdminStatus();
+        }
+
+        await loadTokens();
+        await loadBalances();
+        await updateCurrentPrice();
+
+        closeConnectModal();
+        showToast("\u2705 AliTerra Wallet \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0451\u043d!", "success");
+      } catch(e) {
+        console.error(e);
+        showToast("\u041e\u0448\u0438\u0431\u043a\u0430: " + escHtml(e.message?.slice(0, 80)), "error");
+      }
+    }
+
+        // ================================================================
     //  WALLET CONNECT
     // ================================================================
     async function connectWallet() {
