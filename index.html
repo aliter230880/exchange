@@ -30,12 +30,71 @@
     .toast-success { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.35); color: #34d399; }
     .toast-error   { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35); color: #f87171; }
     .toast-info    { background: rgba(251,191,36,0.12);  border: 1px solid rgba(251,191,36,0.35);  color: #fbbf24; }
-  </style>
+
+      .modal-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(6px); z-index: 9998;
+        display: flex; align-items: center; justify-content: center; padding: 16px;
+      }
+      .modal-box {
+        background: rgb(24,24,27); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 24px; padding: 28px; width: 100%; max-width: 420px;
+        animation: modalIn 0.2s ease;
+      }
+      @keyframes modalIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+    </style>
 </head>
 <body class="bg-zinc-950 text-white min-h-screen">
 
   <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
+
+    <!-- Connect Wallet Modal -->
+    <div id="connectModal" class="modal-overlay hidden" onclick="if(event.target===this)closeConnectModal()">
+      <div class="modal-box">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-xl font-bold">Подключить кошелёк</h2>
+          <button onclick="closeConnectModal()" class="text-zinc-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+
+        <!-- MetaMask option -->
+        <button onclick="closeConnectModal();connectWallet()"
+          class="w-full flex items-center gap-4 p-4 mb-3 bg-zinc-900 hover:bg-zinc-800 border border-white/10 hover:border-yellow-400/30 rounded-2xl transition cursor-pointer">
+          <div class="w-10 h-10 rounded-full bg-orange-500/15 flex items-center justify-center text-xl">🦊</div>
+          <div class="text-left">
+            <p class="font-semibold text-sm">MetaMask</p>
+            <p class="text-zinc-500 text-xs">Расширение для браузера</p>
+          </div>
+        </button>
+
+        <!-- AliTerra Wallet option -->
+        <button onclick="showPkSection()"
+          id="aliterraBtnChoice"
+          class="w-full flex items-center gap-4 p-4 mb-4 bg-zinc-900 hover:bg-zinc-800 border border-white/10 hover:border-yellow-400/30 rounded-2xl transition cursor-pointer">
+          <div class="w-10 h-10 rounded-full bg-yellow-400/15 flex items-center justify-center text-xl">✦</div>
+          <div class="text-left">
+            <p class="font-semibold text-sm">AliTerra Wallet</p>
+            <p class="text-zinc-500 text-xs">Подключение через приватный ключ</p>
+          </div>
+        </button>
+
+        <!-- Private key input (hidden by default) -->
+        <div id="pkSection" class="hidden">
+          <p class="text-zinc-400 text-sm mb-3">
+            Вставь приватный ключ из
+            <a href="https://wallet.aliterra.space/" target="_blank" class="text-yellow-400 hover:underline">wallet.aliterra.space</a>
+          </p>
+          <input id="pkInput" type="password" placeholder="Приватный ключ (0x...)"
+            class="w-full bg-zinc-900 border border-white/10 rounded-2xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-yellow-400/40 mb-3">
+          <button onclick="connectAliTerraWallet()"
+            class="w-full py-4 bg-yellow-400 hover:bg-yellow-300 text-zinc-900 font-bold rounded-3xl transition">
+            Подключить
+          </button>
+          <p class="text-zinc-600 text-xs mt-3 text-center">Ключ не сохраняется и используется только в текущей сессии.</p>
+        </div>
+      </div>
+    </div>
+  
 
   <div class="max-w-2xl mx-auto p-6">
 
@@ -47,10 +106,10 @@
           class="w-12 h-12 rounded-full object-cover shadow-lg shadow-blue-900/40">
         <h1 class="text-4xl font-bold tracking-tighter">LUX Exchange</h1>
       </div>
-      <button id="connectBtn" onclick="connectWallet()"
-        class="px-6 py-3 bg-white text-zinc-900 hover:bg-yellow-400 font-semibold rounded-3xl transition">
-        <span id="connectText">Подключить MetaMask</span>
-      </button>
+      <button id="connectBtn" onclick="showConnectModal()"
+          class="px-6 py-3 bg-white text-zinc-900 hover:bg-yellow-400 font-semibold rounded-3xl transition">
+          <span id="connectText">Подключить кошелёк</span>
+        </button>
     </div>
 
     <!-- Balance Bar -->
