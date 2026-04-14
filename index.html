@@ -572,10 +572,43 @@
 
     async function connectAliTerraWallet() {
       const pk = document.getElementById("pkInput").value.trim();
-      if (!pk) return showToast("\u0412\u0432\u0435\u0434\u0438 \u043f\u0440\u0438\u0432\u0430\u0442\u043d\u044b\u0439 \u043a\u043b\u044e\u0447", "error");
+      if (!pk) return showToast("Введи приватный ключ", "error");
+
+      // CORS-compatible Polygon RPC endpoints (tried in order)
+      const RPC_URLS = [
+        "https://rpc.ankr.com/polygon",
+        "https://polygon-mainnet.public.blastapi.io",
+        "https://polygon.llamarpc.com",
+        "https://1rpc.io/matic",
+        "https://polygon-bor-rpc.publicnode.com",
+      ];
+
+      let rpcProvider = null;
+      let wallet = null;
+      let lastErr = null;
+
+      showToast("Подключение к сети...", "info");
+
+      for (const url of RPC_URLS) {
+        try {
+          const p = new ethers.JsonRpcProvider(url, { chainId: 137, name: "polygon" });
+          const w = new ethers.Wallet(pk, p);
+          // Quick connectivity test
+          await p.getBlockNumber();
+          rpcProvider = p;
+          wallet = w;
+          break;
+        } catch(e) {
+          lastErr = e;
+          console.warn("RPC failed:", url, e.message);
+        }
+      }
+
+      if (!rpcProvider) {
+        return showToast("Не удалось подключиться к Polygon RPC. Проверь сеть.", "error");
+      }
+
       try {
-        const rpcProvider = new ethers.JsonRpcProvider("https://polygon-rpc.com/", 137);
-        const wallet = new ethers.Wallet(pk, rpcProvider);
         provider = rpcProvider;
         signer   = wallet;
 
@@ -585,7 +618,7 @@
         const ownerAddr = await contract.owner();
         isOwner = ownerAddr.toLowerCase() === signer.address.toLowerCase();
 
-        document.getElementById("connectText").textContent = "\u2713 " + shortAddr(signer.address);
+        document.getElementById("connectText").textContent = "✓ " + shortAddr(signer.address);
         const btn = document.getElementById("connectBtn");
         btn.classList.replace("bg-white", "bg-yellow-400");
         btn.onclick = null;
@@ -605,79 +638,12 @@
         await updateCurrentPrice();
 
         closeConnectModal();
-        showToast("\u2705 AliTerra Wallet \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0451\u043d!", "success");
+        showToast("✅ AliTerra Wallet подключён!", "success");
       } catch(e) {
         console.error(e);
-        showToast("\u041e\u0448\u0438\u0431\u043a\u0430: " + escHtml(e.message?.slice(0, 80)), "error");
+        showToast("Ошибка: " + escHtml(e.message?.slice(0, 80)), "error");
       }
-    }
-
-        // ================================================================
-    //  WALLET CONNECT
-    // ================================================================
-    async function connectWallet() {
-      if (!window.ethereum) return showToast("MetaMask не найден!", "error");
-      try {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        provider = new ethers.BrowserProvider(window.ethereum);
-        signer   = await provider.getSigner();
-
-        const net = await provider.getNetwork();
-        if (net.chainId !== POLYGON_ID) {
-          try {
-            await window.ethereum.request({
-              method: "wallet_switchEthereumChain",
-              params: [{ chainId: "0x89" }]
-            });
-          } catch {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [{
-                chainId: "0x89",
-                chainName: "Polygon Mainnet",
-                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-                rpcUrls: ["https://polygon-rpc.com/"],
-                blockExplorerUrls: ["https://polygonscan.com/"]
-              }]
-            });
-          }
-          provider = new ethers.BrowserProvider(window.ethereum);
-          signer   = await provider.getSigner();
-        }
-
-        contract     = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-        luxTokenAddr = await contract.getLUXToken();
-
-        const ownerAddr = await contract.owner();
-        isOwner = ownerAddr.toLowerCase() === signer.address.toLowerCase();
-
-        document.getElementById("connectText").textContent = `✓ ${shortAddr(signer.address)}`;
-        const btn = document.getElementById("connectBtn");
-        btn.classList.replace("bg-white", "bg-yellow-400");
-
-        document.getElementById("refLinkSection").classList.remove("hidden");
-        document.getElementById("refLinkInput").value =
-          `${location.origin}${location.pathname}?ref=${signer.address}`;
-
-        if (isOwner) {
-          document.getElementById("adminPanel").classList.remove("hidden");
-          document.getElementById("ownerAddress").textContent = shortAddr(signer.address);
-          await refreshAdminStatus();
-        }
-
-        await loadTokens();
-        await loadBalances();
-        await updateCurrentPrice();
-
-        window.ethereum.on("accountsChanged", () => location.reload());
-        window.ethereum.on("chainChanged",    () => location.reload());
-
-        showToast("✅ Кошелёк подключён!", "success");
-      } catch(e) {
-        console.error(e);
-        showToast("Ошибка подключения: " + escHtml(e.message?.slice(0, 80)), "error");
-      }
-    }
+    }}
 
     // ================================================================
     //  TOKEN HELPERS
