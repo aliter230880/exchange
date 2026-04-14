@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LUX Exchange</title>
+
+  <!-- ✅ FAVICON -->
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="apple-touch-icon" href="logo.png">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.5/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .glass { background: rgba(255,255,255,0.08); backdrop-filter: blur(16px); }
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,0.3); border-top-color: #000;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 14px 22px; border-radius: 16px; font-size: 14px;
+      font-weight: 500; z-index: 9999; max-width: 380px;
+      transition: opacity 0.3s; backdrop-filter: blur(16px);
+    }
+    .toast-success { background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.35); color: #34d399; }
+    .toast-error   { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35); color: #f87171; }
+    .toast-info    { background: rgba(251,191,36,0.12);  border: 1px solid rgba(251,191,36,0.35);  color: #fbbf24; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-white min-h-screen">
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden"></div>
+
+  <div class="max-w-2xl mx-auto p-6">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-3">
+        <!-- ✅ LOGO вместо жёлтого квадрата -->
+        <img src="logo.png" alt="AliTerra Logo"
+          class="w-12 h-12 rounded-full object-cover shadow-lg shadow-blue-900/40">
+        <h1 class="text-4xl font-bold tracking-tighter">LUX Exchange</h1>
+      </div>
+      <button id="connectBtn" onclick="connectWallet()"
+        class="px-6 py-3 bg-white text-zinc-900 hover:bg-yellow-400 font-semibold rounded-3xl transition">
+        <span id="connectText">Подключить MetaMask</span>
+      </button>
+    </div>
+
+    <!-- Balance Bar -->
+    <div id="balanceBar" class="hidden glass rounded-2xl px-6 py-3 border border-white/10 mb-4 flex flex-wrap gap-5 text-sm">
+      <span class="text-zinc-400">LUX: <span id="luxBalance" class="text-white font-semibold">—</span></span>
+      <span class="text-zinc-400">Токен: <span id="tokenBalance" class="text-white font-semibold">—</span></span>
+      <span class="text-zinc-400">POL: <span id="polBalance" class="text-white font-semibold">—</span></span>
+    </div>
+
+    <!-- Trade Panel -->
+    <div class="glass rounded-3xl p-8 border border-white/10 mb-8">
+
+      <!-- Buy / Sell Tabs -->
+      <div class="flex bg-zinc-900 rounded-3xl p-1 mb-8">
+        <button onclick="setMode(true)" id="buyBtn"
+          class="flex-1 py-4 text-lg font-medium rounded-3xl transition bg-yellow-400 text-zinc-900">
+          Купить LUX
+        </button>
+        <button onclick="setMode(false)" id="sellBtn"
+          class="flex-1 py-4 text-lg font-medium rounded-3xl transition text-zinc-400">
+          Продать LUX
+        </button>
+      </div>
+
+      <!-- PAY -->
+      <div class="mb-6">
+        <div class="flex justify-between mb-2">
+          <p class="text-zinc-400" id="labelPay">Ты платишь</p>
+          <p id="payBalanceLabel" class="text-zinc-500 text-xs self-end"></p>
+        </div>
+        <div class="flex gap-3 bg-zinc-900 border border-white/10 rounded-2xl px-5 py-4 items-center">
+          <select id="tokenSelect" onchange="onTokenChange()"
+            class="bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-base font-semibold focus:outline-none cursor-pointer">
+          </select>
+          <input id="amountInput" type="text" inputmode="decimal" placeholder="0.0"
+            class="flex-1 bg-transparent text-4xl font-light focus:outline-none text-right min-w-0">
+        </div>
+        <div class="flex justify-between mt-2 px-1">
+          <p class="text-zinc-600 text-xs" id="priceInfo">—</p>
+          <p class="text-zinc-600 text-xs">Комиссия: <span id="feeInfo">—</span></p>
+        </div>
+      </div>
+
+      <!-- Swap Arrow -->
+      <div class="flex justify-center my-3">
+        <button onclick="setMode(!isBuyMode)"
+          class="text-yellow-400 text-3xl hover:scale-110 transition select-none">⇅</button>
+      </div>
+
+      <!-- RECEIVE -->
+      <div class="mb-6">
+        <p class="text-zinc-400 mb-2">Ты получаешь</p>
+        <div class="flex items-center gap-4 bg-zinc-900 border border-white/10 rounded-3xl px-6 py-5">
+          <div id="receiveIcon" class="text-3xl">✦</div>
+          <div class="flex-1 min-w-0">
+            <p id="receiveLabel" class="text-zinc-400 text-xs mb-1">LUX</p>
+            <p id="estimatedOutput" class="text-4xl font-light text-yellow-400 truncate">0.0000</p>
+          </div>
+          <p id="minReceive" class="text-xs text-zinc-600 text-right whitespace-nowrap">мин: —</p>
+        </div>
+      </div>
+
+      <!-- Slippage -->
+      <div class="flex items-center gap-2 mb-6 flex-wrap">
+        <p class="text-zinc-500 text-sm mr-1">Slippage:</p>
+        <button onclick="setSlippage(0.5)" id="slip05"
+          class="px-3 py-1 rounded-xl text-sm bg-white/10 hover:bg-yellow-400 hover:text-zinc-900 transition">0.5%</button>
+        <button onclick="setSlippage(1)" id="slip1"
+          class="px-3 py-1 rounded-xl text-sm bg-yellow-400 text-zinc-900">1%</button>
+        <button onclick="setSlippage(3)" id="slip3"
+          class="px-3 py-1 rounded-xl text-sm bg-white/10 hover:bg-yellow-400 hover:text-zinc-900 transition">3%</button>
+        <button onclick="setSlippage(5)" id="slip5"
+          class="px-3 py-1 rounded-xl text-sm bg-white/10 hover:bg-yellow-400 hover:text-zinc-900 transition">5%</button>
+        <input id="customSlippage" type="number" placeholder="свой %" min="0.1" max="50"
+          class="w-20 bg-zinc-900 border border-white/10 rounded-xl px-2 py-1 text-sm text-center focus:outline-none">
+      </div>
+
+      <!-- Referral Bar -->
+      <div id="referralBar" class="hidden mb-5 px-4 py-3 bg-yellow-400/10 border border-yellow-400/20 rounded-2xl">
+        <p class="text-yellow-400 text-sm">🔗 Реферальная ссылка активна: <span id="refDisplay" class="font-mono"></span></p>
+      </div>
+
+      <!-- Trade Button -->
+      <button onclick="executeTrade()" id="tradeButton"
+        class="w-full mt-2 py-6 text-xl font-semibold bg-yellow-400 hover:bg-yellow-300 text-zinc-900 rounded-3xl transition">
+        Купить LUX
+      </button>
+
+      <p id="status" class="text-center text-sm mt-4 text-zinc-400 min-h-[20px]"></p>
+    </div>
+
+    <!-- Ref Link Generator -->
+    <div id="refLinkSection" class="hidden glass rounded-2xl px-6 py-4 border border-white/10 mb-6">
+      <p class="text-sm text-zinc-400 mb-2">🔗 Твоя реферальная ссылка</p>
+      <div class="flex gap-2">
+        <input id="refLinkInput" readonly
+          class="flex-1 bg-zinc-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none">
+        <button onclick="copyRefLink()"
+          class="px-4 bg-yellow-400 text-zinc-900 rounded-xl text-sm font-semibold hover:bg-yellow-300">
+          Копировать
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== ADMIN PANEL ===== -->
+    <div id="adminPanel" class="hidden glass rounded-3xl p-8 border border-yellow-400/30">
+      <h2 class="text-2xl font-semibold mb-5 flex items-center gap-3 flex-wrap">
+        <span>🔧 Панель владельца</span>
+        <span id="ownerAddress" class="text-xs bg-yellow-400 text-zinc-900 px-3 py-1 rounded-full font-mono"></span>
+      </h2>
+
+      <!-- Status row -->
+      <div class="flex gap-3 mb-6 flex-wrap">
+        <div id="tradingStatus" class="px-4 py-2 rounded-xl text-sm font-medium bg-zinc-800">Торговля: —</div>
+        <div id="pauseStatus"   class="px-4 py-2 rounded-xl text-sm font-medium bg-zinc-800">Пауза: —</div>
+        <div id="feeStatus"     class="px-4 py-2 rounded-xl text-sm font-medium bg-zinc-800">Комиссия: —</div>
+        <button onclick="refreshAdminStatus()"
+          class="px-4 py-2 rounded-xl text-sm bg-white/10 hover:bg-white/20">🔄 Обновить</button>
+      </div>
+
+      <div class="grid gap-5">
+
+        <!-- Trading & Pause -->
+        <div class="flex gap-3">
+          <button onclick="toggleTrading()"
+            class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl transition font-medium">
+            ⚡ Вкл / Выкл торговлю
+          </button>
+          <button onclick="togglePause()"
+            class="flex-1 py-4 bg-white/10 hover:bg-white/20 rounded-2xl transition font-medium">
+            ⏸ Пауза / Снять паузу
+          </button>
+        </div>
+
+        <!-- Set Price -->
+        <div class="bg-zinc-900/60 rounded-2xl p-5">
+          <p class="text-sm font-medium mb-1">💰 Установить цену токена</p>
+          <p class="text-xs text-zinc-500 mb-3">
+            Цена = кол-во wei токена за 1 LUX.<br>
+            Пример: 1 USDC/LUX → <code class="text-yellow-400">1000000</code> (6 dec) |
+            1 POL/LUX → <code class="text-yellow-400">1000000000000000000</code> (18 dec)
+          </p>
+          <div class="flex gap-3">
+            <select id="priceTokenSelect"
+              class="bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 w-2/5 focus:outline-none"></select>
+            <input id="priceInput" type="text" placeholder="wei amount"
+              class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 focus:outline-none font-mono text-sm">
+            <button onclick="setPrice()"
+              class="px-5 bg-yellow-400 text-zinc-900 rounded-xl font-semibold hover:bg-yellow-300">
+              Установить
+            </button>
+          </div>
+          <p id="currentPriceAdmin" class="text-xs text-zinc-500 mt-2"></p>
+        </div>
+
+        <!-- Fee Config -->
+        <div class="bg-zinc-900/60 rounded-2xl p-5">
+          <p class="text-sm font-medium mb-1">
+            📊 Комиссия — текущая: <span id="currentFee" class="text-yellow-400">—</span>
+          </p>
+          <p class="text-xs text-zinc-500 mb-3">100 bps = 1% | 300 bps = 3% | макс 500 bps = 5%</p>
+          <div class="flex gap-3 items-center">
+            <input id="feeInput" type="number" value="300" min="0" max="500"
+              class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 focus:outline-none">
+            <span id="feePercent" class="text-zinc-400 text-sm w-14 text-center">3.00%</span>
+            <button onclick="setFee()"
+              class="px-6 bg-yellow-400 text-zinc-900 rounded-xl font-semibold hover:bg-yellow-300">
+              Обновить
+            </button>
+          </div>
+        </div>
+
+        <!-- Referral Config -->
+        <div class="bg-zinc-900/60 rounded-2xl p-5">
+          <p class="text-sm font-medium mb-1">👥 Реферальная система</p>
+          <p class="text-xs text-zinc-500 mb-3">
+            Значения в basis points (bps). 1000 = 10% | Сумма L1+L2+L3 ≤ 5000 bps
+          </p>
+          <div class="flex gap-3 mb-3">
+            <div class="flex-1 text-center">
+              <p class="text-xs text-zinc-500 mb-1">L1 (bps)</p>
+              <input id="refL1" type="number" value="1000" min="0" max="3000"
+                class="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 focus:outline-none text-center">
+              <p id="refL1Pct" class="text-xs text-zinc-600 mt-1">10.00%</p>
+            </div>
+            <div class="flex-1 text-center">
+              <p class="text-xs text-zinc-500 mb-1">L2 (bps)</p>
+              <input id="refL2" type="number" value="500" min="0" max="3000"
+                class="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 focus:outline-none text-center">
+              <p id="refL2Pct" class="text-xs text-zinc-600 mt-1">5.00%</p>
+            </div>
+            <div class="flex-1 text-center">
+              <p class="text-xs text-zinc-500 mb-1">L3 (bps)</p>
+              <input id="refL3" type="number" value="200" min="0" max="3000"
+                class="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 focus:outline-none text-center">
+              <p id="refL3Pct" class="text-xs text-zinc-600 mt-1">2.00%</p>
+            </div>
+          </div>
+          <p class="text-xs text-zinc-500 mb-1">Default Referrer</p>
+          <div class="flex gap-3">
+            <input id="defaultRefInput" placeholder="0x... (адрес default referrer)"
+              class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none">
+            <button onclick="setRefConfig()"
+              class="px-5 bg-yellow-400 text-zinc-900 rounded-xl font-semibold hover:bg-yellow-300">
+              Сохранить
+            </button>
+          </div>
+        </div>
+
+        <!-- Manage Tokens -->
+        <div class="bg-zinc-900/60 rounded-2xl p-5">
+          <p class="text-sm font-medium mb-3">🪙 Управление токенами</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-xs text-zinc-500 mb-2">Добавить токен</p>
+              <input id="addTokenInput" placeholder="0x..."
+                class="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none mb-2">
+              <button onclick="addToken()"
+                class="w-full py-2 bg-emerald-400 text-zinc-900 rounded-xl font-semibold hover:bg-emerald-300">
+                Добавить
+              </button>
+            </div>
+            <div>
+              <p class="text-xs text-zinc-500 mb-2">Удалить токен</p>
+              <input id="removeTokenInput" placeholder="0x..."
+                class="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none mb-2">
+              <button onclick="removeToken()"
+                class="w-full py-2 bg-red-400 text-white rounded-xl font-semibold hover:bg-red-300">
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Withdraw -->
+        <div class="bg-zinc-900/60 rounded-2xl p-5">
+          <p class="text-sm font-medium mb-3">💸 Вывод резервов</p>
+          <div class="flex gap-3 mb-3">
+            <select id="withdrawTokenSelect"
+              class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 focus:outline-none"></select>
+            <button onclick="withdrawAll()"
+              class="px-5 bg-amber-400 text-zinc-900 rounded-xl font-semibold hover:bg-amber-300">
+              Всё
+            </button>
+          </div>
+          <div class="flex gap-3">
+            <input id="withdrawAmountInput" type="text" placeholder="Сумма (или оставь пустым)"
+              class="flex-1 bg-zinc-800 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none">
+            <button onclick="withdrawAmount()"
+              class="px-5 bg-amber-400/30 text-amber-400 border border-amber-400/30 rounded-xl font-medium hover:bg-amber-400/20">
+              Вывести
+            </button>
+          </div>
+        </div>
+
+        <!-- Transfer Ownership -->
+        <div class="pt-4 border-t border-white/10">
+          <button onclick="transferOwnership()"
+            class="w-full py-4 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-2xl font-medium transition">
+            ⚠️ Передать владение (необратимо)
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <p class="text-center text-zinc-600 text-xs mt-10">Polygon • LUX Exchange v2.0</p>
+  </div>
+
+  <script>
+    // ================================================================
+    //  CONFIG
+    // ================================================================
+    const CONTRACT_ADDRESS = "0xe5646EBf223499E0d15Af09F8e42cC6586B0512b";
+    const NATIVE      = "0x0000000000000000000000000000000000001010";
+    const ZERO_ADDR   = "0x0000000000000000000000000000000000000000";
+    const POLYGON_ID  = 137n;
+
+    // ================================================================
+    //  ABI
+    // ================================================================
+    const ABI = [
+      { inputs:[], name:"owner",
+        outputs:[{name:"",type:"address"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getLUXToken",
+        outputs:[{name:"",type:"address"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getTrading",
+        outputs:[{name:"",type:"bool"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getPaused",
+        outputs:[{name:"",type:"bool"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getSupportedTokens",
+        outputs:[{name:"",type:"address[]"}], stateMutability:"view", type:"function" },
+      { inputs:[{name:"token",type:"address"}], name:"getPrice",
+        outputs:[{name:"",type:"uint256"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getFeeCollector",
+        outputs:[{name:"",type:"address"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getExchangeFeeBps",
+        outputs:[{name:"",type:"uint256"}], stateMutability:"view", type:"function" },
+      { inputs:[], name:"getRefConfig",
+        outputs:[{components:[
+          {name:"level1",type:"uint256"},{name:"level2",type:"uint256"},
+          {name:"level3",type:"uint256"},{name:"defaultRef",type:"address"}
+        ], name:"", type:"tuple"}], stateMutability:"view", type:"function" },
+      { inputs:[{name:"user",type:"address"}], name:"getReferrer",
+        outputs:[{name:"",type:"address"}], stateMutability:"view", type:"function" },
+      { inputs:[{name:"referrer",type:"address"}], name:"getReferralEarnings",
+        outputs:[{name:"",type:"uint256"}], stateMutability:"view", type:"function" },
+      {
+        inputs:[
+          {name:"token",      type:"address"},
+          {name:"tokenAmount",type:"uint256"},
+          {name:"referrer",   type:"address"}
+        ],
+        name:"buyLUX", outputs:[],
+        stateMutability:"payable", type:"function"
+      },
+      {
+        inputs:[
+          {name:"token",     type:"address"},
+          {name:"luxAmount", type:"uint256"},
+          {name:"referrer",  type:"address"}
+        ],
+        name:"sellLUX", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[
+          {name:"_feeBps",      type:"uint256"},
+          {name:"_feeCollector",type:"address"}
+        ],
+        name:"setFeeConfig", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[
+          {name:"l1",         type:"uint256"},
+          {name:"l2",         type:"uint256"},
+          {name:"l3",         type:"uint256"},
+          {name:"defaultRef", type:"address"}
+        ],
+        name:"setRefConfig", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"token",type:"address"},{name:"price",type:"uint256"}],
+        name:"setTokenPrice", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"enabled",type:"bool"}],
+        name:"setTrading", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"token",type:"address"}],
+        name:"addSupportedToken", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"token",type:"address"}],
+        name:"removeSupportedToken", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"token",type:"address"}],
+        name:"withdrawAllToken", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"token",type:"address"},{name:"amount",type:"uint256"}],
+        name:"withdrawToken", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      { inputs:[], name:"pause",   outputs:[], stateMutability:"nonpayable", type:"function" },
+      { inputs:[], name:"unpause", outputs:[], stateMutability:"nonpayable", type:"function" },
+      {
+        inputs:[{name:"newOwner",type:"address"}],
+        name:"transferOwnership", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      },
+      {
+        inputs:[{name:"user",type:"address"},{name:"referrer",type:"address"}],
+        name:"setReferrer", outputs:[],
+        stateMutability:"nonpayable", type:"function"
+      }
+    ];
+
+    const ERC20_ABI = [
+      "function decimals() view returns (uint8)",
+      "function symbol() view returns (string)",
+      "function balanceOf(address) view returns (uint256)",
+      "function allowance(address owner, address spender) view returns (uint256)",
+      "function approve(address spender, uint256 amount) returns (bool)"
+    ];
+
+    // ================================================================
+    //  STATE
+    // ================================================================
+    let provider, signer, contract;
+    let isOwner         = false;
+    let isBuyMode       = true;
+    let currentSlippage = 1;
+    let luxTokenAddr    = null;
+    let currentReferrer = ZERO_ADDR;
+
+    const decimalsCache = {};
+    const symbolCache   = {};
+    let   estimateTimer = null;
+
+    // ================================================================
+    //  UTILS
+    // ================================================================
+    function showToast(msg, type = "info") {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.className = `toast toast-${type}`;
+      t.classList.remove("hidden");
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.classList.add("hidden"), 4500);
+    }
+
+    function setStatus(msg, color = "zinc") {
+      const map = {
+        zinc:   "text-zinc-400",
+        yellow: "text-yellow-400",
+        green:  "text-emerald-400",
+        red:    "text-red-400"
+      };
+      document.getElementById("status").innerHTML =
+        `<span class="${map[color] || map.zinc}">${escHtml(msg)}</span>`;
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function shortAddr(a) { return a.slice(0,6) + "..." + a.slice(-4); }
+    function bpsToStr(bps) { return (Number(bps) / 100).toFixed(2) + "%"; }
+
+    // ================================================================
+    //  WALLET CONNECT
+    // ================================================================
+    async function connectWallet() {
+      if (!window.ethereum) return showToast("MetaMask не найден!", "error");
+      try {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer   = await provider.getSigner();
+
+        const net = await provider.getNetwork();
+        if (net.chainId !== POLYGON_ID) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: "0x89" }]
+            });
+          } catch {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: "0x89",
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+                rpcUrls: ["https://polygon-rpc.com/"],
+                blockExplorerUrls: ["https://polygonscan.com/"]
+              }]
+            });
+          }
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer   = await provider.getSigner();
+        }
+
+        contract     = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        luxTokenAddr = await contract.getLUXToken();
+
+        const ownerAddr = await contract.owner();
+        isOwner = ownerAddr.toLowerCase() === signer.address.toLowerCase();
+
+        document.getElementById("connectText").textContent = `✓ ${shortAddr(signer.address)}`;
+        const btn = document.getElementById("connectBtn");
+        btn.classList.replace("bg-white", "bg-yellow-400");
+
+        document.getElementById("refLinkSection").classList.remove("hidden");
+        document.getElementById("refLinkInput").value =
+          `${location.origin}${location.pathname}?ref=${signer.address}`;
+
+        if (isOwner) {
+          document.getElementById("adminPanel").classList.remove("hidden");
+          document.getElementById("ownerAddress").textContent = shortAddr(signer.address);
+          await refreshAdminStatus();
+        }
+
+        await loadTokens();
+        await loadBalances();
+        await updateCurrentPrice();
+
+        window.ethereum.on("accountsChanged", () => location.reload());
+        window.ethereum.on("chainChanged",    () => location.reload());
+
+        showToast("✅ Кошелёк подключён!", "success");
+      } catch(e) {
+        console.error(e);
+        showToast("Ошибка подключения: " + escHtml(e.message?.slice(0, 80)), "error");
+      }
+    }
+
+    // ================================================================
+    //  TOKEN HELPERS
+    // ================================================================
+    async function getDecimals(addr) {
+      if (addr === NATIVE) return 18;
+      if (decimalsCache[addr] !== undefined) return decimalsCache[addr];
+      try {
+        const d = Number(await new ethers.Contract(addr, ERC20_ABI, provider).decimals());
+        return (decimalsCache[addr] = d);
+      } catch { return (decimalsCache[addr] = 18); }
+    }
+
+    async function getSymbol(addr) {
+      if (addr === NATIVE) return "POL";
+      if (symbolCache[addr]) return symbolCache[addr];
+      try {
+        const s = await new ethers.Contract(addr, ERC20_ABI, provider).symbol();
+        return (symbolCache[addr] = s);
+      } catch { return (symbolCache[addr] = shortAddr(addr)); }
+    }
+
+    async function getBalance(tokenAddr, userAddr) {
+      if (!userAddr) return 0n;
+      if (tokenAddr === NATIVE) return provider.getBalance(userAddr);
+      return new ethers.Contract(tokenAddr, ERC20_ABI, provider).balanceOf(userAddr);
+    }
+
+    async function ensureAllowance(tokenAddr, amount) {
+      const tok = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+      const cur = await tok.allowance(signer.address, CONTRACT_ADDRESS);
+      if (cur >= amount) return;
+      setStatus("⏳ Подтверди Approve в MetaMask...", "yellow");
+      const tx = await tok.approve(CONTRACT_ADDRESS, ethers.MaxUint256);
+      setStatus("⏳ Ждём подтверждения Approve...", "yellow");
+      await tx.wait();
+      setStatus("✅ Approve подтверждён", "green");
+    }
+
+    // ================================================================
+    //  LOAD TOKENS
+    // ================================================================
+    async function loadTokens() {
+      if (!contract) return;
+      try {
+        const tokens = await contract.getSupportedTokens();
+        const sel  = document.getElementById("tokenSelect");
+        const pSel = document.getElementById("priceTokenSelect");
+        const wSel = document.getElementById("withdrawTokenSelect");
+
+        sel.innerHTML  = `<option value="${NATIVE}">POL</option>`;
+        pSel.innerHTML = `<option value="${NATIVE}">POL</option>`;
+        wSel.innerHTML = `<option value="${NATIVE}">POL (нативный)</option>`;
+
+        for (const t of tokens) {
+          if (luxTokenAddr && t.toLowerCase() === luxTokenAddr.toLowerCase()) continue;
+          if (t.toLowerCase() === NATIVE.toLowerCase()) continue;
+
+          const sym   = await getSymbol(t);
+          const label = `${sym} (${shortAddr(t)})`;
+          sel.innerHTML  += `<option value="${t}">${label}</option>`;
+          pSel.innerHTML += `<option value="${t}">${label}</option>`;
+          wSel.innerHTML += `<option value="${t}">${sym}</option>`;
+        }
+      } catch(e) { console.error("loadTokens:", e); }
+    }
+
+    // ================================================================
+    //  LOAD BALANCES
+    // ================================================================
+    async function loadBalances() {
+      if (!signer || !provider) return;
+      const addr  = signer.address;
+      const token = document.getElementById("tokenSelect")?.value;
+      document.getElementById("balanceBar").classList.remove("hidden");
+
+      const pol = await provider.getBalance(addr);
+      document.getElementById("polBalance").textContent =
+        parseFloat(ethers.formatEther(pol)).toFixed(4);
+
+      if (luxTokenAddr) {
+        const lux = await getBalance(luxTokenAddr, addr);
+        document.getElementById("luxBalance").textContent =
+          parseFloat(ethers.formatEther(lux)).toFixed(4);
+      }
+
+      if (token) {
+        const dec = await getDecimals(token);
+        const bal = await getBalance(token, addr);
+        const sym = await getSymbol(token);
+        document.getElementById("tokenBalance").textContent =
+          parseFloat(ethers.formatUnits(bal, dec)).toFixed(4) + " " + sym;
+        document.getElementById("payBalanceLabel").textContent =
+          `Баланс: ${parseFloat(ethers.formatUnits(bal, dec)).toFixed(4)} ${sym}`;
+      }
+    }
+
+    // ================================================================
+    //  REFERRER FROM URL
+    // ================================================================
+    function initReferrer() {
+      const ref = new URLSearchParams(location.search).get("ref");
+      if (ref && ethers.isAddress(ref)) {
+        currentReferrer = ref;
+        document.getElementById("referralBar").classList.remove("hidden");
+        document.getElementById("refDisplay").textContent = shortAddr(ref);
+      }
+    }
+
+    // ================================================================
+    //  TRADE MODE
+    // ================================================================
+    function setMode(buy) {
+      isBuyMode = buy;
+      const on  = "flex-1 py-4 text-lg font-medium rounded-3xl transition bg-yellow-400 text-zinc-900";
+      const off = "flex-1 py-4 text-lg font-medium rounded-3xl transition text-zinc-400";
+      document.getElementById("buyBtn").className  = buy  ? on : off;
+      document.getElementById("sellBtn").className = !buy ? on : off;
+      document.getElementById("tradeButton").textContent = buy ? "Купить LUX" : "Продать LUX";
+      document.getElementById("labelPay").textContent    = buy ? "Ты платишь" : "Ты отдаёшь LUX";
+      updateReceiveLabel();
+      triggerEstimate();
+    }
+
+    async function updateReceiveLabel() {
+      if (isBuyMode) {
+        document.getElementById("receiveIcon").textContent  = "✦";
+        document.getElementById("receiveLabel").textContent = "LUX";
+      } else {
+        const token = document.getElementById("tokenSelect")?.value || NATIVE;
+        const sym   = await getSymbol(token);
+        document.getElementById("receiveIcon").textContent  = "◈";
+        document.getElementById("receiveLabel").textContent = sym;
+      }
+    }
+
+    async function onTokenChange() {
+      await updateReceiveLabel();
+      await loadBalances();
+      await updateCurrentPrice();
+      triggerEstimate();
+    }
+
+    // ================================================================
+    //  SLIPPAGE
+    // ================================================================
+    function setSlippage(v) {
+      currentSlippage = v;
+      const ids = ["slip05","slip1","slip3","slip5"];
+      ids.forEach(id => {
+        document.getElementById(id).className =
+          "px-3 py-1 rounded-xl text-sm bg-white/10 hover:bg-yellow-400 hover:text-zinc-900 transition";
+      });
+      const map = { 0.5:"slip05", 1:"slip1", 3:"slip3", 5:"slip5" };
+      if (map[v]) {
+        document.getElementById(map[v]).className =
+          "px-3 py-1 rounded-xl text-sm bg-yellow-400 text-zinc-900";
+      }
+      triggerEstimate();
+    }
+
+    // ================================================================
+    //  PRICE ESTIMATE
+    // ================================================================
+    function triggerEstimate() {
+      clearTimeout(estimateTimer);
+      estimateTimer = setTimeout(updateEstimate, 350);
+    }
+
+    async function updateEstimate() {
+      const outEl = document.getElementById("estimatedOutput");
+      const minEl = document.getElementById("minReceive");
+      const feeEl = document.getElementById("feeInfo");
+      if (!contract) { outEl.textContent = "—"; return; }
+
+      const amtStr = document.getElementById("amountInput").value?.trim();
+      const token  = document.getElementById("tokenSelect")?.value;
+      if (!amtStr || !token || parseFloat(amtStr) <= 0) {
+        outEl.textContent = "0.0000";
+        minEl.textContent = "мин: —";
+        return;
+      }
+
+      try {
+        const price  = await contract.getPrice(token);
+        const feeBps = await contract.getExchangeFeeBps();
+        feeEl.textContent = bpsToStr(feeBps);
+
+        if (price === 0n) { outEl.textContent = "⚠️ нет цены"; return; }
+
+        let estimated;
+        if (isBuyMode) {
+          const dec    = await getDecimals(token);
+          const amount = ethers.parseUnits(amtStr, dec);
+          const fee    = amount * feeBps / 10000n;
+          const net    = amount - fee;
+          estimated    = (net * ethers.parseUnits("1", 18)) / price;
+          outEl.textContent = parseFloat(ethers.formatUnits(estimated, 18)).toFixed(6);
+        } else {
+          const luxAmt    = ethers.parseUnits(amtStr, 18);
+          const tokBefore = (luxAmt * price) / ethers.parseUnits("1", 18);
+          const fee       = tokBefore * feeBps / 10000n;
+          estimated       = tokBefore - fee;
+          const dec       = await getDecimals(token);
+          outEl.textContent = parseFloat(ethers.formatUnits(estimated, dec)).toFixed(6);
+        }
+
+        const estimatedF = parseFloat(outEl.textContent);
+        const minOut     = estimatedF * (1 - currentSlippage / 100);
+        minEl.textContent = `мин: ${minOut.toFixed(6)}`;
+      } catch(e) {
+        outEl.textContent = "—";
+        console.warn("estimate:", e.message);
+      }
+    }
+
+    async function updateCurrentPrice() {
+      if (!contract) return;
+      const token = document.getElementById("tokenSelect")?.value;
+      if (!token) return;
+      try {
+        const price = await contract.getPrice(token);
+        const sym   = await getSymbol(token);
+        const dec   = await getDecimals(token);
+        document.getElementById("priceInfo").textContent =
+          price === 0n
+            ? "⚠️ Цена не установлена"
+            : `1 LUX = ${ethers.formatUnits(price, dec)} ${sym}`;
+        const adminPriceEl = document.getElementById("currentPriceAdmin");
+        if (adminPriceEl) {
+          adminPriceEl.textContent = price === 0n ? "" : `Текущая: ${price.toString()} wei`;
+        }
+      } catch {}
+    }
+
+    // ================================================================
+    //  EXECUTE TRADE
+    // ================================================================
+    async function executeTrade() {
+      if (!contract || !signer) return showToast("Сначала подключи кошелёк", "error");
+      const amtStr = document.getElementById("amountInput").value?.trim();
+      if (!amtStr || parseFloat(amtStr) <= 0) return showToast("Введи корректную сумму", "error");
+
+      const token = document.getElementById("tokenSelect").value;
+      const btn   = document.getElementById("tradeButton");
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner"></span>${isBuyMode ? "Покупка..." : "Продажа..."}`;
+
+      try {
+        if (isBuyMode) {
+          const dec    = await getDecimals(token);
+          const amount = ethers.parseUnits(amtStr, dec);
+
+          if (token === NATIVE) {
+            setStatus("⏳ Подтверди транзакцию в MetaMask...", "yellow");
+            const tx = await contract.buyLUX(token, amount, currentReferrer, { value: amount });
+            setStatus("⏳ Ждём подтверждения блока...", "yellow");
+            await tx.wait();
+          } else {
+            await ensureAllowance(token, amount);
+            setStatus("⏳ Подтверди покупку в MetaMask...", "yellow");
+            const tx = await contract.buyLUX(token, amount, currentReferrer);
+            setStatus("⏳ Ждём подтверждения блока...", "yellow");
+            await tx.wait();
+          }
+
+        } else {
+          if (!luxTokenAddr) throw new Error("LUX адрес не загружен");
+          const luxAmt = ethers.parseUnits(amtStr, 18);
+          await ensureAllowance(luxTokenAddr, luxAmt);
+          setStatus("⏳ Подтверди продажу в MetaMask...", "yellow");
+          const tx = await contract.sellLUX(token, luxAmt, currentReferrer);
+          setStatus("⏳ Ждём подтверждения блока...", "yellow");
+          await tx.wait();
+        }
+
+        setStatus("", "zinc");
+        showToast("✅ Сделка выполнена!", "success");
+        document.getElementById("amountInput").value = "";
+        document.getElementById("estimatedOutput").textContent = "0.0000";
+        document.getElementById("minReceive").textContent = "мин: —";
+        await loadBalances();
+
+      } catch(e) {
+        console.error(e);
+        const reason = e?.reason || e?.info?.error?.message || e?.message || "Неизвестная ошибка";
+        setStatus("Ошибка: " + reason.slice(0, 120), "red");
+        showToast("❌ Транзакция отклонена", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = isBuyMode ? "Купить LUX" : "Продать LUX";
+      }
+    }
+
+    // ================================================================
+    //  ADMIN FUNCTIONS
+    // ================================================================
+    async function refreshAdminStatus() {
+      if (!contract) return;
+      try {
+        const [trading, paused, feeBps] = await Promise.all([
+          contract.getTrading(),
+          contract.getPaused(),
+          contract.getExchangeFeeBps()
+        ]);
+
+        const tdEl = document.getElementById("tradingStatus");
+        const psEl = document.getElementById("pauseStatus");
+
+        tdEl.textContent = "Торговля: " + (trading ? "✅ ВКЛ" : "❌ ВЫКЛ");
+        tdEl.className   = `px-4 py-2 rounded-xl text-sm font-medium ${
+          trading ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+        }`;
+
+        psEl.textContent = "Пауза: " + (paused ? "⏸ ДА" : "▶️ НЕТ");
+        psEl.className   = `px-4 py-2 rounded-xl text-sm font-medium ${
+          paused ? "bg-red-400/10 text-red-400" : "bg-emerald-400/10 text-emerald-400"
+        }`;
+
+        document.getElementById("feeStatus").textContent  = `Комиссия: ${bpsToStr(feeBps)}`;
+        document.getElementById("currentFee").textContent = `${feeBps} bps (${bpsToStr(feeBps)})`;
+        document.getElementById("feeInput").value = feeBps.toString();
+        document.getElementById("feePercent").textContent = bpsToStr(feeBps);
+      } catch(e) { console.error(e); }
+    }
+
+    async function adminTx(fn, successMsg) {
+      try {
+        const tx = await fn();
+        await tx.wait();
+        showToast(successMsg, "success");
+        await refreshAdminStatus();
+      } catch(e) {
+        showToast("Ошибка: " + escHtml(e?.reason || e?.message?.slice(0, 70)), "error");
+      }
+    }
+
+    async function toggleTrading() {
+      const cur = await contract.getTrading();
+      await adminTx(
+        () => contract.setTrading(!cur),
+        `Торговля ${!cur ? "включена ✅" : "выключена ❌"}`
+      );
+    }
+
+    async function togglePause() {
+      const cur = await contract.getPaused();
+      await adminTx(
+        () => cur ? contract.unpause() : contract.pause(),
+        cur ? "Пауза снята ▶️" : "Контракт на паузе ⏸"
+      );
+    }
+
+    async function setPrice() {
+      const token = document.getElementById("priceTokenSelect").value;
+      const price = document.getElementById("priceInput").value?.trim();
+      if (!price || !token) return showToast("Заполни все поля", "error");
+      try { BigInt(price); } catch { return showToast("Неверный формат числа", "error"); }
+      await adminTx(
+        () => contract.setTokenPrice(token, BigInt(price)),
+        "✅ Цена установлена"
+      );
+      await updateCurrentPrice();
+    }
+
+    async function setFee() {
+      const fee = parseInt(document.getElementById("feeInput").value);
+      if (isNaN(fee) || fee < 0 || fee > 500)
+        return showToast("Допустимо: 0–500 bps", "error");
+      try {
+        const collector = await contract.getFeeCollector();
+        await adminTx(
+          () => contract.setFeeConfig(fee, collector),
+          `✅ Комиссия: ${bpsToStr(fee)}`
+        );
+      } catch(e) {
+        showToast("Ошибка: " + escHtml(e?.reason || e?.message?.slice(0, 70)), "error");
+      }
+    }
+
+    async function addToken() {
+      const addr = document.getElementById("addTokenInput").value?.trim();
+      if (!ethers.isAddress(addr)) return showToast("Неверный адрес", "error");
+      await adminTx(() => contract.addSupportedToken(addr), "✅ Токен добавлен");
+      document.getElementById("addTokenInput").value = "";
+      await loadTokens();
+    }
+
+    async function removeToken() {
+      const addr = document.getElementById("removeTokenInput").value?.trim();
+      if (!ethers.isAddress(addr)) return showToast("Неверный адрес", "error");
+      if (!confirm(`Удалить токен ${addr}?`)) return;
+      await adminTx(() => contract.removeSupportedToken(addr), "✅ Токен удалён");
+      document.getElementById("removeTokenInput").value = "";
+      await loadTokens();
+    }
+
+    async function withdrawAll() {
+      const token = document.getElementById("withdrawTokenSelect").value || NATIVE;
+      const sym   = await getSymbol(token);
+      if (!confirm(`Вывести ВЕСЬ ${sym} на кошелёк владельца?`)) return;
+      await adminTx(() => contract.withdrawAllToken(token), `✅ Весь ${sym} выведен`);
+    }
+
+    async function withdrawAmount() {
+      const token  = document.getElementById("withdrawTokenSelect").value || NATIVE;
+      const amtStr = document.getElementById("withdrawAmountInput").value?.trim();
+      if (!amtStr) return withdrawAll();
+      const dec = await getDecimals(token);
+      const amt = ethers.parseUnits(amtStr, dec);
+      await adminTx(() => contract.withdrawToken(token, amt), `✅ Выведено ${amtStr}`);
+      document.getElementById("withdrawAmountInput").value = "";
+    }
+
+    async function setRefConfig() {
+      const l1  = parseInt(document.getElementById("refL1").value);
+      const l2  = parseInt(document.getElementById("refL2").value);
+      const l3  = parseInt(document.getElementById("refL3").value);
+      const def = document.getElementById("defaultRefInput").value?.trim() || ZERO_ADDR;
+
+      if ([l1, l2, l3].some(isNaN)) return showToast("Введи корректные bps", "error");
+      if (l1 + l2 + l3 > 5000)      return showToast("L1+L2+L3 не должны превышать 5000 bps", "error");
+      if (!ethers.isAddress(def))    return showToast("Неверный адрес default referrer", "error");
+
+      await adminTx(
+        () => contract.setRefConfig(l1, l2, l3, def),
+        `✅ Реферальная: ${bpsToStr(l1)} / ${bpsToStr(l2)} / ${bpsToStr(l3)}`
+      );
+    }
+
+    async function transferOwnership() {
+      if (!confirm("⚠️ ВНИМАНИЕ! Передача владения необратима!")) return;
+      const newOwner = prompt("Введи адрес нового владельца:");
+      if (!newOwner) return;
+      if (!ethers.isAddress(newOwner)) return showToast("Неверный адрес", "error");
+      if (!confirm(`Передать владение → ${newOwner}?`)) return;
+      await adminTx(
+        () => contract.transferOwnership(newOwner),
+        "✅ Владение передано. Обнови страницу."
+      );
+      document.getElementById("adminPanel").classList.add("hidden");
+    }
+
+    function copyRefLink() {
+      navigator.clipboard.writeText(document.getElementById("refLinkInput").value)
+        .then(() => showToast("✅ Ссылка скопирована!", "success"));
+    }
+
+    // ================================================================
+    //  EVENT LISTENERS
+    // ================================================================
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("amountInput")
+        .addEventListener("input", triggerEstimate);
+
+      document.getElementById("customSlippage")
+        .addEventListener("input", function() {
+          if (this.value) {
+            currentSlippage = parseFloat(this.value) || 1;
+            triggerEstimate();
+          }
+        });
+
+      document.getElementById("feeInput")
+        ?.addEventListener("input", function() {
+          document.getElementById("feePercent").textContent =
+            bpsToStr(parseInt(this.value) || 0);
+        });
+
+      ["refL1","refL2","refL3"].forEach(id => {
+        document.getElementById(id)?.addEventListener("input", function() {
+          document.getElementById(id + "Pct").textContent =
+            bpsToStr(parseInt(this.value) || 0);
+        });
+      });
+    });
+
+    // ================================================================
+    //  INIT
+    // ================================================================
+    initReferrer();
+  </script>
+</body>
+</html>
