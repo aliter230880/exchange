@@ -645,6 +645,74 @@
       }
     }
 
+
+    // ================================================================
+    //  WALLET CONNECT (MetaMask)
+    // ================================================================
+    async function connectWallet() {
+      if (!window.ethereum) return showToast("MetaMask не найден!", "error");
+      try {
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer   = await provider.getSigner();
+
+        const net = await provider.getNetwork();
+        if (net.chainId !== POLYGON_ID) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: "0x89" }]
+            });
+          } catch {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: "0x89",
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+                rpcUrls: ["https://polygon-rpc.com/"],
+                blockExplorerUrls: ["https://polygonscan.com/"]
+              }]
+            });
+          }
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer   = await provider.getSigner();
+        }
+
+        contract     = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+        luxTokenAddr = await contract.getLUXToken();
+
+        const ownerAddr = await contract.owner();
+        isOwner = ownerAddr.toLowerCase() === signer.address.toLowerCase();
+
+        document.getElementById("connectText").textContent = "\u2713 " + shortAddr(signer.address);
+        const btn = document.getElementById("connectBtn");
+        btn.classList.replace("bg-white", "bg-yellow-400");
+        btn.onclick = null;
+
+        document.getElementById("refLinkSection").classList.remove("hidden");
+        document.getElementById("refLinkInput").value =
+          location.origin + location.pathname + "?ref=" + signer.address;
+
+        if (isOwner) {
+          document.getElementById("adminPanel").classList.remove("hidden");
+          document.getElementById("ownerAddress").textContent = shortAddr(signer.address);
+          await refreshAdminStatus();
+        }
+
+        await loadTokens();
+        await loadBalances();
+        await updateCurrentPrice();
+
+        window.ethereum.on("accountsChanged", () => location.reload());
+        window.ethereum.on("chainChanged",    () => location.reload());
+
+        showToast("\u2705 MetaMask \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0451\u043d!", "success");
+      } catch(e) {
+        console.error(e);
+        showToast("\u041e\u0448\u0438\u0431\u043a\u0430: " + escHtml(e.message?.slice(0, 80)), "error");
+      }
+    }
     // ================================================================
     //  TOKEN HELPERS
     // ================================================================
